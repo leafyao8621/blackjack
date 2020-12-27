@@ -1,0 +1,3 @@
+ncurses/bj
+ncurses/src/*.o
+ncurses/src/*/*.o
