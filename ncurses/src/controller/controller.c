@@ -1,9 +1,12 @@
 #include <stdlib.h>
+#include <string.h>
 #include <ncurses.h>
 #include "../core/core.h"
 
 #define BET 0
-#define ENTRY 1
+#define ENTRY_BET 1
+#define PLAY 2
+#define ENTRY_PLAY 3
 
 static char mode;
 static signed char cur_menu;
@@ -13,8 +16,8 @@ static char entry_buf[8];
 static void render_basic(void) {
     mvprintw(0, 0, "Money:     $%8ld.%02ld",
              game.money / 100, game.money % 100);
-    mvprintw(1, 0, "Principal: $%8ld.%02ld",
-             game.principal / 100, game.principal % 100);
+    mvprintw(1, 0, "Principle: $%8ld.%02ld",
+             game.principle / 100, game.principle % 100);
     mvprintw(2, 0, "Interest:  $%8ld.%02ld",
              game.interest / 100, game.interest % 100);
     mvprintw(3, 0, "Gain:      $%8ld.%02ld",
@@ -24,14 +27,14 @@ static void render_basic(void) {
     mvaddstr(5, 0, "Banker:");
     char banker = core_banker_val();
     if (banker & BLACKJACK) {
-        mvaddstr(5, 8, "BLACKJACK");
+        mvprintw(5, 7, "%13s", "BLACKJACK");
     } else if (banker & BUST) {
-        mvaddstr(5, 8, "BUST");
+        mvprintw(5, 7, "%13s", "BUST");
     } else {
         if (banker & SOFT) {
-            mvaddstr(5, 8, "SOFT ");
+            mvaddstr(5, 8, "SOFT");
         }
-        mvprintw(5, 14, "%hhd", banker & 0x1f);
+        mvprintw(5, 12, "%8hhd", banker & 0x1f);
     }
     int j = 0;
     for (char *i = game.banker; i != game.banker_end; ++i, j += 2) {
@@ -45,21 +48,19 @@ static void render_basic(void) {
     mvaddstr(8, 0, "Player:");
     char player = core_player_val();
     if (player & BLACKJACK) {
-        mvaddstr(8, 8, "BLACKJACK");
+        mvprintw(8, 7, "%13s", "BLACKJACK");
     } else if (player & BUST) {
-        mvaddstr(8, 8, "BUST");
+        mvprintw(8, 7, "%13s", "BUST");
     } else {
         if (player & SOFT) {
-            mvaddstr(8, 8, "SOFT ");
+            mvaddstr(8, 8, "SOFT");
         }
-        mvprintw(8, 14, "%hhd", player & 0x1f);
+        mvprintw(8, 12, "%8hhd", player & 0x1f);
     }
     j = 0;
     for (char *i = game.player; i != game.player_end; ++i, j += 2) {
         mvprintw(9, j, "%c", core_get_name(*i));
     }
-    cur_menu = 0;
-    cur_entry = 0;
 }
 
 static void render_bet(void) {
@@ -69,22 +70,38 @@ static void render_bet(void) {
     move(11, 0);
 }
 
+static void render_play(void) {
+    mvaddstr(11, 0, "Hit");
+    mvaddstr(12, 0, "Stand ");
+    mvaddstr(13, 0, "Split");
+    mvaddstr(14, 0, "Double");
+    mvaddstr(15, 0, "Borrow");
+    move(11, 0);
+}
+
 static void render_entry(void) {
-    mvprintw(11 + cur_menu, 11, "$%08d", 0, 0);
-    move(11 + cur_menu, 12 + cur_entry);
+    mvprintw(11 + cur_menu, 11, "$ %s", entry_buf);
+    move(11 + cur_menu, 13 + cur_entry);
 }
 
 static void remove_entry(void) {
     mvprintw(11 + cur_menu, 11, "%9c", ' ');
     move(11 + cur_menu, 0);
 }
+
 void controller_initialize(void) {
     initscr();
     keypad(stdscr, TRUE);
     noecho();
     core_initialize(1, 0);
+    cur_menu = 0;
+    cur_entry = 0;
+    memset(entry_buf, '0', 7);
+    entry_buf[7] = 0;
     render_basic();
     render_bet();
+    // game.shoe[0] = 0;
+    // game.shoe[2] = 10;
 }
 
 char controller_handle(void) {
@@ -113,31 +130,185 @@ char controller_handle(void) {
         case 'z':
         case 'J':
         case 'j':
-            mode = ENTRY;
+            mode = ENTRY_BET;
             render_entry();
             break;
         }
         break;
-    case ENTRY:
+    case ENTRY_BET:
         switch (in) {
         case KEY_LEFT:
         case 'A':
         case 'a':
-            cur_entry = (cur_entry - 1) & 7;
-            move(11 + cur_menu, 12 + cur_entry);
+            cur_entry = (((cur_entry - 1) % 7) + 7) % 7;
+            move(11 + cur_menu, 13 + cur_entry);
             break;
         case KEY_RIGHT:
         case 'D':
         case 'd':
-            cur_entry = (cur_entry + 1) & 7;
-            move(11 + cur_menu, 12 + cur_entry);
+            cur_entry = (cur_entry + 1) % 7;
+            move(11 + cur_menu, 13 + cur_entry);
+            break;
+        case KEY_UP:
+        case 'W':
+        case 'w':
+            if (entry_buf[cur_entry] == '9') {
+                entry_buf[cur_entry] = '0';
+            } else {
+                ++entry_buf[cur_entry];
+            }
+            render_entry();
+            break;
+        case KEY_DOWN:
+        case 'S':
+        case 's':
+            if (entry_buf[cur_entry] == '0') {
+                entry_buf[cur_entry] = '9';
+            } else {
+                --entry_buf[cur_entry];
+            }
+            render_entry();
             break;
         case 'X':
         case 'x':
+        case 'K':
+        case 'k':
             mode = BET;
             remove_entry();
             break;
+        case 'Z':
+        case 'z':
+        case 'J':
+        case 'j':
+            switch (cur_menu) {
+            case 0:
+                if (!core_bet(atoi(entry_buf) * 100)) {
+                    mode = PLAY;
+                    memset(entry_buf, '0', 7);
+                    cur_entry = 0;
+                    core_start_game();
+                    remove_entry();
+                    render_basic();
+                    render_play();
+                }
+                break;
+            case 1:
+                if (!core_borrow(atoi(entry_buf) * 100)) {
+                    mode = BET;
+                    memset(entry_buf, '0', 7);
+                    cur_entry = 0;
+                    render_basic();
+                    remove_entry();
+                }
+                break;
+            case 2:
+                if (!core_pay(atoi(entry_buf) * 100)) {
+                    mode = BET;
+                    memset(entry_buf, '0', 7);
+                    cur_entry = 0;
+                    render_basic();
+                    remove_entry();
+                }
+                break;
+            }
+            break;
         }
+        break;
+    case PLAY:
+        switch (in) {
+        case KEY_UP:
+        case 'W':
+        case 'w':
+            cur_menu = (((cur_menu - 1) % 5) + 5) % 5;
+            move(11 + cur_menu, 0);
+            break;
+        case KEY_DOWN:
+        case 'S':
+        case 's':
+            cur_menu = (cur_menu + 1) % 5;
+            move(11 + cur_menu, 0);
+            break;
+        case 'Z':
+        case 'z':
+        case 'J':
+        case 'j':
+            switch (cur_menu) {
+            case 0:
+                break;
+            case 1:
+                break;
+            case 3:
+                break;
+            case 2:
+            case 4:
+                mode = ENTRY_PLAY;
+                render_entry();
+                break;
+            }
+            break;
+        }
+        break;
+    case ENTRY_PLAY:
+        switch (in) {
+        case KEY_LEFT:
+        case 'A':
+        case 'a':
+            cur_entry = (((cur_entry - 1) % 7) + 7) % 7;
+            move(11 + cur_menu, 13 + cur_entry);
+            break;
+        case KEY_RIGHT:
+        case 'D':
+        case 'd':
+            cur_entry = (cur_entry + 1) % 7;
+            move(11 + cur_menu, 13 + cur_entry);
+            break;
+        case KEY_UP:
+        case 'W':
+        case 'w':
+            if (entry_buf[cur_entry] == '9') {
+                entry_buf[cur_entry] = '0';
+            } else {
+                ++entry_buf[cur_entry];
+            }
+            render_entry();
+            break;
+        case KEY_DOWN:
+        case 'S':
+        case 's':
+            if (entry_buf[cur_entry] == '0') {
+                entry_buf[cur_entry] = '9';
+            } else {
+                --entry_buf[cur_entry];
+            }
+            render_entry();
+            break;
+        case 'X':
+        case 'x':
+        case 'K':
+        case 'k':
+            mode = PLAY;
+            remove_entry();
+            break;
+        case 'Z':
+        case 'z':
+        case 'J':
+        case 'j':
+            switch (cur_menu) {
+            case 2:
+                break;
+            case 4:
+                if (!core_borrow(atoi(entry_buf) * 100)) {
+                    mode = PLAY;
+                    memset(entry_buf, '0', 7);
+                    cur_entry = 0;
+                    render_basic();
+                    remove_entry();
+                }
+                break;
+            }
+            break;
+        }
+        break;
     }
     return 0;
 }

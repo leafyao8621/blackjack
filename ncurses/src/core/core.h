@@ -22,7 +22,7 @@ struct Game {
     unsigned len;
     char reshuffle;
     long money;
-    long principal;
+    long principle;
     long interest;
     long gain;
     long bet;
@@ -32,9 +32,10 @@ struct Game {
 extern struct Game game;
 
 void core_initialize(char n_deck, char reshuffle);
-void core_log(FILE *fout);
+void core_start_game(void);
 char core_bet(long val);
 char core_borrow(long val);
+char core_pay(long val);
 char core_banker_val(void);
 char core_player_val(void);
 char core_get_val(char idx);
