@@ -7,6 +7,7 @@
 #define ENTRY_BET 1
 #define PLAY 2
 #define ENTRY_PLAY 3
+#define BANKER 4
 
 static char mode;
 static signed char cur_menu;
@@ -21,20 +22,22 @@ static void render_basic(void) {
     mvprintw(2, 0, "Interest:  $%8ld.%02ld",
              game.interest / 100, game.interest % 100);
     mvprintw(3, 0, "Gain:      $%8ld.%02ld",
-             game.gain / 100, game.gain % 100);
+             game.gain / 100, ((game.gain % 100) + 100) % 100);
     mvprintw(4, 0, "Bet:       $%8ld.%02ld",
              game.bet / 100, game.bet % 100);
     mvaddstr(5, 0, "Banker:");
     char banker = core_banker_val();
     if (banker & BLACKJACK) {
         mvprintw(5, 7, "%13s", "BLACKJACK");
-    } else if (banker & BUST) {
+    } else if ((banker & 0x3f) > 21) {
         mvprintw(5, 7, "%13s", "BUST");
     } else {
         if (banker & SOFT) {
             mvaddstr(5, 8, "SOFT");
+        } else {
+            mvaddstr(5, 8, "    ");
         }
-        mvprintw(5, 12, "%8hhd", banker & 0x1f);
+        mvprintw(5, 12, "%8hhd", banker & 0x3f);
     }
     int j = 0;
     for (char *i = game.banker; i != game.banker_end; ++i, j += 2) {
@@ -42,20 +45,22 @@ static void render_basic(void) {
     }
     mvaddstr(7, 0, "Banker Hidden:");
     if (game.reveal) {
-        mvprintw(7, 15, " %c val: %d",
+        mvprintw(7, 14, "%6c",
                  core_get_name(game.banker_hidden));
     }
     mvaddstr(8, 0, "Player:");
     char player = core_player_val();
     if (player & BLACKJACK) {
         mvprintw(8, 7, "%13s", "BLACKJACK");
-    } else if (player & BUST) {
+    } else if ((player & 0x3f) > 21) {
         mvprintw(8, 7, "%13s", "BUST");
     } else {
         if (player & SOFT) {
             mvaddstr(8, 8, "SOFT");
+        } else {
+            mvaddstr(8, 8, "    ");
         }
-        mvprintw(8, 12, "%8hhd", player & 0x1f);
+        mvprintw(8, 12, "%8hhd", player & 0x3f);
     }
     j = 0;
     for (char *i = game.player; i != game.player_end; ++i, j += 2) {
@@ -64,7 +69,7 @@ static void render_basic(void) {
 }
 
 static void render_bet(void) {
-    mvaddstr(11, 0, "Bet");
+    mvaddstr(11, 0, "Bet ");
     mvaddstr(12, 0, "Borrow");
     mvaddstr(13, 0, "Pay");
     move(11, 0);
@@ -76,6 +81,15 @@ static void render_play(void) {
     mvaddstr(13, 0, "Split");
     mvaddstr(14, 0, "Double");
     mvaddstr(15, 0, "Borrow");
+    move(11, 0);
+}
+
+static void render_banker(void) {
+    mvaddstr(11, 0, "Next");
+    mvaddstr(12, 0, "      ");
+    mvaddstr(13, 0, "     ");
+    mvaddstr(14, 0, "      ");
+    mvaddstr(15, 0, "      ");
     move(11, 0);
 }
 
@@ -100,12 +114,16 @@ void controller_initialize(void) {
     entry_buf[7] = 0;
     render_basic();
     render_bet();
-    // game.shoe[0] = 0;
-    // game.shoe[2] = 10;
+    game.shoe[0] = 10;
+    game.shoe[2] = 0;
+    // game.shoe[4] = 0;
+    // game.shoe[5] = 5;
+    // game.shoe[6] = 8;
 }
 
 char controller_handle(void) {
     int in = getch();
+    char ret = 0;
     switch (in) {
     case 'Q':
     case 'q':
@@ -183,13 +201,19 @@ char controller_handle(void) {
             switch (cur_menu) {
             case 0:
                 if (!core_bet(atoi(entry_buf) * 100)) {
-                    mode = PLAY;
                     memset(entry_buf, '0', 7);
                     cur_entry = 0;
-                    core_start_game();
-                    remove_entry();
-                    render_basic();
-                    render_play();
+                    if (!core_start_game()) {
+                        mode = PLAY;
+                        remove_entry();
+                        render_basic();
+                        render_play();
+                    } else {
+                        mode = BANKER;
+                        render_basic();
+                        remove_entry();
+                        render_banker();
+                    }
                 }
                 break;
             case 1:
@@ -234,12 +258,30 @@ char controller_handle(void) {
         case 'j':
             switch (cur_menu) {
             case 0:
+                if (!core_hit()) {
+                    render_basic();
+                    move(11, 0);
+                } else {
+                    mode = BANKER;
+                    render_basic();
+                    render_banker();
+                }
                 break;
             case 1:
-                break;
-            case 3:
+                mode = BANKER;
+                render_basic();
+                render_banker();
                 break;
             case 2:
+                break;
+            case 3:
+                if (!core_double()) {
+                    core_hit();
+                    mode = BANKER;
+                    render_basic();
+                    render_banker();
+                }
+                break;
             case 4:
                 mode = ENTRY_PLAY;
                 render_entry();
@@ -304,6 +346,68 @@ char controller_handle(void) {
                     render_basic();
                     remove_entry();
                 }
+                break;
+            }
+            break;
+        }
+        break;
+    case BANKER:
+        switch (in) {
+        case 'Z':
+        case 'z':
+        case 'J':
+        case 'j':
+            ret = core_banker();
+            render_basic();
+            move(11, 0);
+            switch (ret) {
+            case PUSH:
+                mvaddstr(10, 0, "PUSH");
+                move(11, 0);
+                getch();
+                mvaddstr(10, 0, "    ");
+                core_reset();
+                core_accrue_interest();
+                mode = BET;
+                mvprintw(6, 0, "%40c", ' ');
+                mvprintw(9, 0, "%40c", ' ');
+                mvprintw(7, 14, "%6c", ' ');
+                render_basic();
+                render_bet();
+                cur_menu = 0;
+                cur_entry = 0;
+                break;
+            case WIN:
+                mvaddstr(10, 0, "WIN");
+                move(11, 0);
+                getch();
+                mvaddstr(10, 0, "   ");
+                core_reset();
+                core_accrue_interest();
+                mode = BET;
+                mvprintw(6, 0, "%40c", ' ');
+                mvprintw(9, 0, "%40c", ' ');
+                mvprintw(7, 14, "%6c", ' ');
+                render_basic();
+                render_bet();
+                cur_menu = 0;
+                cur_entry = 0;
+                break;
+            case LOSS:
+                mvaddstr(10, 0, "LOSS");
+                move(11, 0);
+                getch();
+                mvaddstr(10, 0, "    ");
+                core_reset();
+                core_accrue_interest();
+                mode = BET;
+                mvprintw(6, 0, "%40c", ' ');
+                mvprintw(9, 0, "%40c", ' ');
+                mvprintw(7, 14, "%6c", ' ');
+                render_basic();
+                render_bet();
+                cur_menu = 0;
+                cur_entry = 0;
                 break;
             }
             break;
