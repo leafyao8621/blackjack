@@ -206,6 +206,11 @@ char core_hit(void) {
 
 char core_banker(void) {
     char init = 0;
+    char player = core_player_val();
+    if ((player & 0x3f) > 21) {
+        game.gain -= game.bet;
+        return LOSS;
+    }
     if (!game.reveal) {
         init = 1;
         game.reveal = 1;
@@ -234,10 +239,6 @@ char core_banker(void) {
             game.money += game.bet << 1;
             game.gain += game.bet;
             return WIN;
-        }
-        if ((player & 0x3f) > 21) {
-            game.gain -= game.bet;
-            return LOSS;
         }
         if ((player & 0x3f) > (banker & 0x3f)) {
             game.money += game.bet << 1;
