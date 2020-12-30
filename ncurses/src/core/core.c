@@ -215,7 +215,6 @@ char core_banker(void) {
         init = 1;
         game.reveal = 1;
     }
-    char player = core_player_val();
     char banker = core_banker_val();
     if (player & BLACKJACK) {
         if (banker & BLACKJACK) {
