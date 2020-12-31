@@ -103,6 +103,8 @@ void core_initialize(char n_deck, char reshuffle) {
     game.reshuffle = reshuffle;
     game.shoe_end = game.shoe + game.len;
     game.shoe_cur = game.shoe;
+    game.split_cur = game.split;
+    game.split_end = game.split;
     game.player_end = game.player;
     game.banker_end = game.banker;
     game.money = 100000;
@@ -199,17 +201,51 @@ char core_hit(void) {
     *(game.player_end++) = *(game.shoe_cur++);
     char player = core_player_val();
     if ((player & 0x3f) >= 21) {
-        return 1;
+        if (game.split_cur == game.split_end) {
+            *(game.split_cur++) = player;
+            ++game.split_end;
+            return 1;
+        } else {
+            *(game.split_cur++) = player;
+            game.player_end = game.player + 1;
+            if (game.shoe_cur == game.shoe_end) {
+                core_shuffle();
+            }
+            *(game.player_end++) = *(game.shoe_cur++);
+            return 2;
+        }
     }
     return 0;
 }
 
+char core_stand(void) {
+    char player = core_player_val();
+    if (game.split_cur != game.split_end) {
+        *(game.split_cur++) = player;
+        game.player_end = game.player + 1;
+        if (game.shoe_cur == game.shoe_end) {
+            core_shuffle();
+        }
+        *(game.player_end++) = *(game.shoe_cur++);
+        return 1;
+    } else {
+        *(game.split_cur++) = player;
+        ++game.split_end;
+        return 0;
+    }
+}
+
 char core_banker(void) {
     char init = 0;
-    char player = core_player_val();
+    char player = game.split_cur[-1];
     if ((player & 0x3f) > 21) {
         game.gain -= game.bet;
-        return LOSS;
+        if (game.split_cur > game.split + 1) {
+            --game.split_cur;
+            return CONT | LOSS;
+        } else {
+            return LOSS;
+        }
     }
     if (!game.reveal) {
         init = 1;
@@ -219,11 +255,60 @@ char core_banker(void) {
     if (player & BLACKJACK) {
         if (banker & BLACKJACK) {
             game.money += game.bet;
-            return PUSH;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | PUSH;
+            } else {
+                return PUSH;
+            }
         } else {
             game.money += (game.bet << 1) + (game.bet >> 1);
             game.gain += game.bet + (game.bet >> 1);
-            return WIN;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | WIN;
+            } else {
+                return WIN;
+            }
+        }
+    }
+    banker = core_banker_val();
+    if ((banker & 0x3f) > 17) {
+        if ((banker & 0x3f) > 21) {
+            game.money += game.bet << 1;
+            game.gain += game.bet;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | WIN;
+            } else {
+                return WIN;
+            }
+        }
+        if ((player & 0x3f) > (banker & 0x3f)) {
+            game.money += game.bet << 1;
+            game.gain += game.bet;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | WIN;
+            } else {
+                return WIN;
+            }
+        } else if ((player & 0x3f) == (banker & 0x3f)) {
+            game.money += game.bet;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | PUSH;
+            } else {
+                return PUSH;
+            }
+        } else {
+            game.gain -= game.bet;
+            if (game.split_cur > game.split + 1) {
+                --game.split_cur;
+                return CONT | LOSS;
+            } else {
+                return LOSS;
+            }
         }
     }
     if (!init) {
@@ -231,24 +316,6 @@ char core_banker(void) {
             core_shuffle();
         }
         *(game.banker_end++) = *(game.shoe_cur++);
-    }
-    banker = core_banker_val();
-    if ((banker & 0x3f) > 17) {
-        if ((banker & 0x3f) > 21) {
-            game.money += game.bet << 1;
-            game.gain += game.bet;
-            return WIN;
-        }
-        if ((player & 0x3f) > (banker & 0x3f)) {
-            game.money += game.bet << 1;
-            return WIN;
-        } else if ((player & 0x3f) == (banker & 0x3f)) {
-            game.money += game.bet;
-            return PUSH;
-        } else {
-            game.gain -= game.bet;
-            return LOSS;
-        }
     }
     return CONT;
 }
@@ -258,6 +325,8 @@ void core_reset(void) {
     game.reveal = 0;
     game.player_end = game.player;
     game.banker_end = game.banker;
+    game.split_cur = game.split;
+    game.split_end = game.split;
 }
 
 char core_double(void) {
@@ -266,5 +335,22 @@ char core_double(void) {
     }
     game.money -= game.bet;
     game.bet += game.bet;
+    return 0;
+}
+
+char core_split(void) {
+    if (!(game.player_end - game.player == 2 &&
+          *(game.player) == game.player[1])) {
+        return 1;
+    }
+    if (game.money < game.bet) {
+        return 2;
+    }
+    game.money -= game.bet;
+    if (game.shoe_cur == game.shoe_end) {
+        core_shuffle();
+    }
+    game.player_end[-1] = *(game.shoe_cur++);
+    game.split_end++;
     return 0;
 }
