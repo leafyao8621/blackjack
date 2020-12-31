@@ -120,9 +120,10 @@ void controller_initialize(void) {
     // game.shoe[1] = 10;
     // game.shoe[2] = 10;
     // game.shoe[3] = 2;
-    // game.shoe[4] = 9;
-    // game.shoe[5] = 7;
+    // game.shoe[4] = 10;
+    // game.shoe[5] = 10;
     // game.shoe[6] = 4;
+    // game.shoe[7] = 9;
 }
 
 char controller_handle(void) {

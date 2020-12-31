@@ -143,6 +143,8 @@ char core_start_game(void) {
     game.banker_hidden = *(game.shoe_cur++);
     char player = core_player_val();
     if (player & BLACKJACK) {
+        *(game.split_cur++) = player;
+        ++game.split_end;
         return 1;
     }
     return 0;
