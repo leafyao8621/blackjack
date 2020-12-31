@@ -49,7 +49,7 @@ static void render_basic(void) {
                  core_get_name(game.banker_hidden));
     }
     mvaddstr(8, 0, "Player:");
-    char player = !game.reveal ?
+    char player = (core_banker_val() & 0x3f) <= 17 ?
                   core_player_val() :
                   game.split_cur[-1];
     if (player & BLACKJACK) {
@@ -116,14 +116,16 @@ void controller_initialize(void) {
     entry_buf[7] = 0;
     render_basic();
     render_bet();
-    // game.shoe[0] = 10;
-    // game.shoe[1] = 10;
-    // game.shoe[2] = 10;
-    // game.shoe[3] = 2;
-    // game.shoe[4] = 10;
-    // game.shoe[5] = 10;
-    // game.shoe[6] = 4;
-    // game.shoe[7] = 9;
+    game.shoe[0] = 10;
+    game.shoe[1] = 2;
+    game.shoe[2] = 10;
+    game.shoe[3] = 2;
+    game.shoe[4] = 10;
+    game.shoe[5] = 2;
+    game.shoe[6] = 7;
+    game.shoe[7] = 10;
+    game.shoe[8] = 9;
+    game.shoe[9] = 1;
 }
 
 char controller_handle(void) {
