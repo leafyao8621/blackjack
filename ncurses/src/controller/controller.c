@@ -49,7 +49,8 @@ static void render_basic(void) {
                  core_get_name(game.banker_hidden));
     }
     mvaddstr(8, 0, "Player:");
-    char player = (core_banker_val() & 0x3f) <= 17 ?
+    char player = (core_banker_val() & 0x3f) <= 17  &&
+                  (core_player_val() <= 21) ?
                   core_player_val() :
                   game.split_cur[-1];
     if (player & BLACKJACK) {
